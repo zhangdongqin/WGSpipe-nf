@@ -42,8 +42,9 @@ def helpMessage() {
 
     The typical command for running the pipeline is as follows:
 
-    nextflow run main.nf --genome genome.fa --gtf genes.gtf --hisat2_index /index/genome --reads 'reads/*_{1,2}.fq.gz'
-
+    nextflow run main.nf --genome genome.fa --reference /path/to/snpindel_annotation --reads 'reads/*_{1,2}.fq.gz'
+    PS： /path/to/snpindel_annotation is defined as a standard google cloud database directory for WGS/WES
+    Annotation can be download in < https://console.cloud.google.com/storage/browser/genomics-public-data/resources/broad/hg38/v0;tab=objects?pageState=(%22StorageObjectListTable%22:(%22f%22:%22%255B%255D%22))&prefix=&forceOnObjectsSortingFiltering=false >
     Required arguments:
       --reads        [file]           Path to input data (must be surrounded with quotes) < 'reads/*_{1,2}.fq.gz' >
       --genome       [file]           Path to reference genome fasta file < /home/db/genome.fa >
