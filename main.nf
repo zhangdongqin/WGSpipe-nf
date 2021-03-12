@@ -43,6 +43,7 @@ def helpMessage() {
     The typical command for running the pipeline is as follows:
 
     nextflow run main.nf --genome genome.fa --reference /path/to/snpindel_annotation --reads 'reads/*_{1,2}.fq.gz'
+
     PS： /path/to/snpindel_annotation is defined as a standard google cloud database directory for WGS/WES
     Annotation can be download in < https://console.cloud.google.com/storage/browser/genomics-public-data/resources/broad/hg38/v0;tab=objects?pageState=(%22StorageObjectListTable%22:(%22f%22:%22%255B%255D%22))&prefix=&forceOnObjectsSortingFiltering=false >
     Required arguments:
@@ -51,9 +52,9 @@ def helpMessage() {
       --reference    [path]           Path to genome snp/indel annotation directory from google cloud          
 
     Optional arguments:
+      --bwa_index    [path]           Path to bwa index for bwa mapping. Default is false, program will denovo generate bwa index.
       --help          [str]           Help information for wgs/wes pipeline
       --cpus          [int]           Cpu cores for pipeline , default is 6, you can specify core numbers with < --cpu 8 >
-      --bwa_index    [path]           Path to bwa index for bwa mapping. Default is false, program will denovo generate bwa index.
       --outdir       [path]           Path to analysis results directory ,defalut is < ./results >.
       --single_end   [bool]           Specifies that the input is single-end reads
       --annovar      [bool]           Specifies that whether annovar is used in this pipeline
@@ -72,60 +73,159 @@ def helpMessage() {
     """.stripIndent()
 }
 
-def nfcoreHeader() {
-    // Log colors ANSI codes
-    c_black = params.monochrome_logs ? '' : "\033[0;30m";
-    c_blue = params.monochrome_logs ? '' : "\033[0;34m";
-    c_cyan = params.monochrome_logs ? '' : "\033[0;36m";
-    c_dim = params.monochrome_logs ? '' : "\033[2m";
-    c_green = params.monochrome_logs ? '' : "\033[0;32m";
-    c_purple = params.monochrome_logs ? '' : "\033[0;35m";
-    c_reset = params.monochrome_logs ? '' : "\033[0m";
-    c_white = params.monochrome_logs ? '' : "\033[0;37m";
-    c_yellow = params.monochrome_logs ? '' : "\033[0;33m";
 
-    return """    -${c_dim}--------------------------------------------------${c_reset}-
-                                            ${c_green},--.${c_black}/${c_green},-.${c_reset}
-    ${c_blue}        ___     __   __   __   ___     ${c_green}/,-._.--~\'${c_reset}
-    ${c_blue}  |\\ | |__  __ /  ` /  \\ |__) |__         ${c_yellow}}  {${c_reset}
-    ${c_blue}  | \\| |       \\__, \\__/ |  \\ |___     ${c_green}\\`-._,-`-,${c_reset}
-                                            ${c_green}`._,._,\'${c_reset}
-    ${c_purple}  nf-core/rnaseq_pipeline/@zhangdongqin2@126.com v${workflow.manifest.version}${c_reset}
-    -${c_dim}--------------------------------------------------${c_reset}-
-    """.stripIndent()
-}
 if (params.help) exit 0, helpMessage()	
 if ( params.genome )        {      genome_fasta = file(params.genome)   } else { exit 1, 'ERROR:Genome fasta file not specified!' }
 if (params.reads){ raw_reads = Channel.fromFilePairs(params.reads,size: params.single_end ? 1 : 2 )
 										 .ifEmpty{ exit 1, "ERROR:Cannot find any reads matching: ${params.reads}\nNB: Path needs to be enclosed in quotes!" }
 				   reads_fastp  = Channel.fromFilePairs(params.reads,size: params.single_end ? 1 : 2 )
 }
+
+if (params.reference) { 
+
+  dbsnp        = file( params.dbsnp )
+  indel1       = file( params.indel1 )
+  indel2       = file( params.indel2 )
+  hapmap       = file( params.hapmap )
+  phase        = file( params.phase )
+  omni         = file( params.omni )
+  dbsnp_index  = file( params.dbsnp_index )
+  indel1_index = file( params.indel1_index )
+  indel2_index = file( params.indel2_index )
+  hapmap_index = file( params.hapmap_index )
+  phase_index  = file( params.phase_index )
+  omni_index   = file( params.omni_index )
+
+ }  else { exit 1, 'ERROR: Goole cloud reference directory for GATK variants calling is not specified' }
+
+
+/*
 if (params.reference) {
-	dbsnp     = "${params.reference}/resources_broad_hg38_v0_Homo_sapiens_assembly38.dbsnp138.vcf"
-	indel1    = "${params.reference}/resources_broad_hg38_v0_Homo_sapiens_assembly38.known_indels.vcf.gz"
-	indel2    = "${params.reference}/resources_broad_hg38_v0_Mills_and_1000G_gold_standard.indels.hg38.vcf.gz"
-	hapmap    = "${params.reference}/resources_broad_hg38_v0_hapmap_3.3.hg38.vcf.gz"
-	phase     = "${params.reference}/resources_broad_hg38_v0_1000G_phase1.snps.high_confidence.hg38.vcf.gz"
-	omni      = "${params.reference}/resources_broad_hg38_v0_1000G_omni2.5.hg38.vcf.gz"
-} else { exit 1, 'ERROR:Goole cloud reference directory for GATK variants calling is not specified' }
+    dbsnp     = "${params.reference}/resources_broad_hg38_v0_Homo_sapiens_assembly38.dbsnp138.vcf"
+    indel1    = "${params.reference}/resources_broad_hg38_v0_Homo_sapiens_assembly38.known_indels.vcf.gz"
+    indel2    = "${params.reference}/resources_broad_hg38_v0_Mills_and_1000G_gold_standard.indels.hg38.vcf.gz"
+    hapmap    = "${params.reference}/resources_broad_hg38_v0_hapmap_3.3.hg38.vcf.gz"
+    phase     = "${params.reference}/resources_broad_hg38_v0_1000G_phase1.snps.high_confidence.hg38.vcf.gz"
+    omni      = "${params.reference}/resources_broad_hg38_v0_1000G_omni2.5.hg38.vcf.gz"
+    dbsnp_index  = "${params.reference}/resources_broad_hg38_v0_Homo_sapiens_assembly38.dbsnp138.vcf.idx"
+    indel1_index = "${params.reference}/resources_broad_hg38_v0_Homo_sapiens_assembly38.known_indels.vcf.gz.tbi"
+    indel2_index = "${params.reference}/resources_broad_hg38_v0_Mills_and_1000G_gold_standard.indels.hg38.vcf.gz.tbi"
+    hapmap_index = "${params.reference}/resources_broad_hg38_v0_hapmap_3.3.hg38.vcf.gz.tbi"
+    phase_index  = "${params.reference}/resources_broad_hg38_v0_1000G_phase1.snps.high_confidence.hg38.vcf.gz.tbi"
+    omni_index   = "${params.reference}/resources_broad_hg38_v0_1000G_omni2.5.hg38.vcf.gz.tbi"
+} else { exit 1, 'ERROR: Goole cloud reference directory for GATK variants calling is not specified' }
 
-
+*/
 
 log.info nfcoreHeader()
 log.info print_yellow("=====================================")
-log.info print_yellow("Fastq file extension:           ") + print_green(params.reads)
-log.info print_yellow("Output directory:               ") + print_green(params.outdir)
-log.info print_yellow("Genome sequence file:           ") + print_green(params.genome)
-log.info print_yellow("BWA index path:                 ") + print_green(params.bwa_index)
-log.info print_yellow("SNP/INDEL path:   	           ") + print_green(params.reference)
-log.info print_yellow("Cpu core number:                ") + print_green(params.cpus)
+log.info print_yellow("Fastq file extension:            ") + print_green(params.reads)
+log.info print_yellow("Output directory:                ") + print_green(params.outdir)
+log.info print_yellow("Genome sequence file:            ") + print_green(params.genome)
+log.info print_yellow("BWA index path:                  ") + print_green(params.bwa_index)
+log.info print_yellow("SNP/INDEL path:   	              ") + print_green(params.reference)
+log.info print_yellow("Cpu core number:                 ") + print_green(params.cpus)
+log.info print_yellow("DBSNP_annotation:                ") + print_green(dbsnp)
+log.info print_yellow("Known_indels:                    ") + print_green(indel1)
+log.info print_yellow("1000G_gold_standard.indels:      ") + print_green(indel2)
+log.info print_yellow("HAPMAP_annotation:               ") + print_green(hapmap)
+log.info print_yellow("1000G_phase1_annotation:         ") + print_green(phase)
+log.info print_yellow("1000G_omni_annotation:           ") + print_green(omni)
+log.info print_yellow("DBSNP_annotation_index:          ") + print_green(dbsnp_index)
+log.info print_yellow("Known_indels_index:              ") + print_green(indel1_index)
+log.info print_yellow("1000G_gold_standard.indels_index:") + print_green(indel2_index)
+log.info print_yellow("HAPMAP_annotation_index:         ") + print_green(hapmap_index)
+log.info print_yellow("1000G_phase1_annotation_index:   ") + print_green(phase_index)
+log.info print_yellow("1000G_omni_annotation_index:     ") + print_green(omni_index)
 log.info print_yellow("=====================================")
+
+process GET_NEXTFLOW_SOFTWARE_VERSION_FOR_WGS_ANALYSIS {
+   publishDir "${params.outdir}/pipeline_info", mode: params.publish_dir_mode
+
+   output:
+   path ("*.txt"), emit: software_version
+   script:
+   """
+   echo $workflow.manifest.version > v_pipeline.txt
+   echo $workflow.nextflow.version > v_nextflow.txt
+   """
+}
+process GET_FASTQC_SOFTWARE_VERSION_FOR_WGS_ANALYSIS {
+   label 'fastqc'
+   publishDir "${params.outdir}/pipeline_info", mode: params.publish_dir_mode
+
+   output:
+   path ("*.txt"), emit: software_version
+   script:
+   """
+   fastqc --version > v_fastqc.txt
+   """
+}
+process GET_SAMTOOLS_SOFTWARE_VERSION_FOR_WGS_ANALYSIS {
+   label 'samtools'
+   publishDir "${params.outdir}/pipeline_info", mode: params.publish_dir_mode
+
+   output:
+   path ("*.txt"), emit: software_version
+   script:
+   """
+   samtools --version > v_samtools.txt
+   """
+}
+process GET_MULTIQC_SOFTWARE_VERSION_FOR_WGS_ANALYSIS {
+   label 'multiqc'
+   publishDir "${params.outdir}/pipeline_info", mode: params.publish_dir_mode
+
+   output:
+   path ("*.txt"), emit: software_version
+   script:
+   """
+   multiqc --version > v_multiqc.txt
+   """
+}
+process GET_BWA_SOFTWARE_VERSION_FOR_WGS_ANALYSIS {
+   label 'bwa'
+   publishDir "${params.outdir}/pipeline_info", mode: params.publish_dir_mode
+
+   output:
+   path ("*.txt"), emit: software_version
+   script:
+   """
+  echo \$(bwa 2>&1) | sed 's/^.*Version: //; s/Contact:.*\$//' > v_bwa.txt
+   """
+}
+
+process GET_GATK_SOFTWARE_VERSION_FOR_WGS_ANALYSIS{
+    label 'gatk'
+    publishDir "${params.outdir}/pipeline_info", mode: params.publish_dir_mode
+
+    output:
+    path ("*.txt"), emit: software_version
+    script:
+    """
+    gatk --version > v_gatk.txt
+    """
+}
+
+process GET_FASTP_SOFTWARE_VERSION_FOR_WGS_ANALYSIS{
+    label 'gatk'
+    publishDir "${params.outdir}/pipeline_info", mode: params.publish_dir_mode
+
+    output:
+    path ("*.txt"), emit: software_version
+    script:
+    """
+    fastp --version > v_fastp.txt
+    """
+}
+
 
 /*
 --------------------------------------------------------------------------------
 Define a fastqc for raw_reads function for pipeline
 --------------------------------------------------------------------------------
 */
+
 process FASTQC_QUALITY_CHECK_FOR_RAW_READS {
     tag "$sample"
     publishDir "${params.outdir}/raw_fastqc_report", mode: 'copy'
@@ -220,11 +320,14 @@ process FASTQC_QUALITY_CHECK_FOR_CLEAN_READS {
 }
 }
 
+
+
+
 process FASTQC_QUALITY_CHECK_FOR_SORTED_BAM {
 	tag "$sample"
     publishDir "${params.outdir}/bam_check", mode: 'copy'
     input:
-    tuple val(sample), path bam
+    tuple val(sample), path (bam)
     output:
     tuple val(sample), path("*.html"), emit: html
     tuple val(sample), path("*.zip") , emit: zip
@@ -236,10 +339,9 @@ process FASTQC_QUALITY_CHECK_FOR_SORTED_BAM {
 
 process BWA_INDEX_BUILD_FOR_GENOME_FASTA {
     tag "$fasta"
-
     publishDir "${params.outdir}",mode: params.publish_dir_mode,
 
-    conda (params.enable_conda ? "bioconda::bwa=0.7.17" : null)
+    //conda (params.enable_conda ? "bioconda::bwa=0.7.17" : null)
 
     input:
     path fasta
@@ -253,10 +355,35 @@ process BWA_INDEX_BUILD_FOR_GENOME_FASTA {
     """
 }
 
+process SAMTOOLS_FAI_INDEX_FOR_INPUT_GENOME_FASTA {
+
+	input:
+	path fasta
+	output:
+	path ("*.fai"), emit: genome_fai
+	script:
+	"""
+	samtools faidx $fasta
+	"""
+}
+
+process GATK_CREATE_SEQUENCE_DICTIONARY_FOR_INPUT_GENOME_FASTA{
+
+    input:
+    path fasta
+    output:
+    path ("*.dict"), emit: genome_dict
+    script:
+    """
+    gatk CreateSequenceDictionary -R $fasta
+    """
+}
+
+
 process BWA_MAPPING_FOR_CLEAN_READS_RESULTED_BY_FASTP {
     tag "$sample"
     
-    conda (params.enable_conda ? "bioconda::bwa=0.7.17 bioconda::samtools=1.10" : null)
+    //conda (params.enable_conda ? "bioconda::bwa=0.7.17 bioconda::samtools=1.10" : null)
 
     input:
     tuple val(sample), path (reads)
@@ -276,7 +403,7 @@ process BWA_MAPPING_FOR_CLEAN_READS_RESULTED_BY_FASTP {
         \$INDEX \\
         ${reads[0]} \\
         ${reads[1]} \\
-        | samtools view -F 4 -F 8 -F 256 -@ $task.cpus -bhS -o ${sample}.bam -
+        | samtools view -F 4 -F 8 -F 256 -@ $task.cpus -bhS -o ${sample}.bam
 
     """
 }
@@ -394,10 +521,15 @@ process GATK_BASERECALIBRATOR_FOR_GATK_MARKDUPLICATES_BAM{
 	publishDir "$params.outdir/BaseRecalibrator/table", pattern: '*.table'
 	input:
 	tuple val(sample), path (bam)
+	path fai
+    path dict
 	path genome
 	path dbsnp
 	path indel1
 	path indel2
+    path dbsnp_index
+    path indel1_index
+    path indel2_index
 	output:
 	tuple val(sample), path ("*.recal.data.table") , emit: bqsr_table
 
@@ -420,11 +552,13 @@ process GATK_APPLYBQSR_FOR_MARKDUPLICATES_BAM_WITH_BASERECALIBRATOR_TABLE{
 	tag "$sample"
 	input:
 	tuple val(sample), path (bam)
+	path fai
+    path dict
 	path genome
 	tuple val(sample),path (recal_table)
 
 	output:
-	path ("*.sorted.MarkDuplicates.BQSR.bam") , emit: bqsr_bam
+	tuple val(sample), path ("*.sorted.MarkDuplicates.BQSR.bam") , emit: bqsr_bam
 	script:
 	"""
 	gatk \\
@@ -441,18 +575,21 @@ process GATK_APPLYBQSR_FOR_MARKDUPLICATES_BAM_WITH_BASERECALIBRATOR_TABLE{
 
 process GATK_HAPLOTYPECALLER_FOR_APPLIED_BQSR_QC_BAM  {
 	tag "$sample"
+	publishDir "${params.outdir}/gatk_vcf/gatk_gvcf", mode: params.publish_dir_mode
 	input:
 	tuple val(sample), path (bam)
+	path fai
+    path dict
 	path genome
 	path dbsnp
-
+	path dbsnp_index
 	output:
-	path ("*.gvcf") , emit: gvcf
+	tuple val(sample), path ("*.gvcf") , emit: gvcf
 	script:
 	"""
 	gatk \\
 		--java-options \\
-		"-Xmx8G -Djava.io.tmpdir=./" \\
+		"-Xmx12G -Djava.io.tmpdir=./" \\
 		HaplotypeCaller \\
 		-R $genome \\
 		--emit-ref-confidence GVCF \\
@@ -463,23 +600,33 @@ process GATK_HAPLOTYPECALLER_FOR_APPLIED_BQSR_QC_BAM  {
 }
 
 
-process COMBINE_GVCF_FILE_RESULTED_BY_GATK_HAPLOTYPECALLER{	
-
+process COMBINE_GVCF_FILE_RESULTED_BY_GATK_HAPLOTYPECALLER{
+    tag "$sample"
+	publishDir "${params.outdir}/gatk_vcf/gatk_gvcf/merged_gvcf", mode: params.publish_dir_mode
 	input:
-	path gvcf_list
+    //tuple val(sample), path(gvcfs)
+	path fai
+    path dict
 	path genome
-
+	path ('gvcf_path/*')
 	output:
 	path ("GATK_combined_bqsr.gvcf") , emit: combined_gvcf
 
 	script:
+    /*def input = ""
+    for (gvcf in gvcfs) {
+        input += " --variant ${gvcf}"
+    }   */
+
 	"""
+    ls -lhrt gvcf_path/* |awk '{print \$11}' > gvcf.list
+
 	gatk \\
 		--java-options \\
 		"-Xmx8G -Djava.io.tmpdir=./" \\
 		CombineGVCFs \\
 		-R $genome \\
-		--variant $gvcf_list \\
+		--variant gvcf.list \\
 		-O GATK_combined_bqsr.gvcf
 	"""
 } 
@@ -489,29 +636,128 @@ process GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES{
 	publishDir "${params.outdir}/gatk_vcf", mode: params.publish_dir_mode
 	input:
 	path gvcf
+	path fai
+  path dict
 	path genome
+  /*path dbsnp
+    path indel
+    path hapmap
+    path omni
+    path phase
+    path dbsnp_index
+    path indel_index
+    path hapmap_index
+    path omni_index
+    path phase_index*/
+
 	output:
-	path ("*.raw.vcf") , emit:vcf
+	path ("GATK_combined_bqsr.vcf") , emit: vcf
+    path ("merged.VQSR.snps.vcf") ,   emit: snp
+    path ("merged.VQSR.indel.vcf") ,  emit: indel
 	script:
 	"""
 	gatk \\
-		GenotypeGVCFs \\
-		-R $genome \\
-		-V $gvcf \\
-		-O GATK_combined_bqsr.vcf	
-	"""	
+    		GenotypeGVCFs \\
+    		-R $genome \\
+    		-V $gvcf \\
+    		-O GATK_combined_bqsr.vcf
+  """
+/*
+    gatk \\
+            --java-options \\
+            "-Xmx8G -Djava.io.tmpdir=./" \\
+            VariantRecalibrator \\
+            -R $genome \\
+            -V GATK_combined_bqsr.vcf \\
+            -resource:hapmap,known=false,training=true,truth=true,prior=15.0 $hapmap \\
+            -resource:omini,known=false,training=true,truth=false,prior=12.0 $omni \\
+            -resource:1000G,known=false,training=true,truth=false,prior=10.0 $phase \\
+            -resource:dbsnp,known=true,training=false,truth=false,prior=6.0 $dbsnp \\
+            --tranches-file merged.snps.tranches \\
+            --rscript-file merged.snps.plots.R \\
+            -an QD \\
+            -an MQ \\
+            -an MQRankSum \\
+            -an ReadPosRankSum \\
+            -an FS \\
+            -an SOR \\
+            -an DP \\
+            -mode SNP \\
+            -O merged.snps.recal 
+        
+    gatk \\
+            ApplyVQSR \\
+            -R $genome \\
+            -V GATK_combined_bqsr.vcf \\
+            --tranches-file merged.snps.tranches \\
+            -recal-file merged.snps.recal \\
+            -mode SNP \\
+            -O merged.VQSR.snps.vcf 
+        
+    gatk \\
+            --java-options \\
+            "-Xmx8G -Djava.io.tmpdir=./" \\
+            VariantRecalibrator \\
+            -R $genome \\
+            -V GATK_combined_bqsr.vcf \\
+            -resource:indel,known=false,training=true,truth=true,prior=15.0 $indel \\
+            -resource:dbsnp,known=true,training=false,truth=false,prior=6.0 $dbsnp \\
+            --tranches-file merged.indel.tranches \\
+            --rscript-file merged.indel.plots.R \\
+            -an QD \\
+            -an MQ \\
+            -an MQRankSum \\
+            -an ReadPosRankSum \\
+            -an FS \\
+            -an SOR \\
+            -an DP \\
+            -mode INDEL \\
+            -O merged.indel.recal 
+    
+    gatk \\
+            ApplyVQSR \\
+            -R $genome \\
+            -V GATK_combined_bqsr.vcf \\
+            --tranches-file merged.indel.tranches \\
+            -recal-file merged.indel.recal  \\
+            -mode INDEL \\
+            -O merged.VQSR.indel.vcf
+	"""
+
+*/	
 }
+
+
+
+process TEST_GVCF_LIST {
+	publishDir "${params.outdir}/gatk_vcf", mode: params.publish_dir_mode
+	input:
+	path gvcf_list
+	output:
+	path ("gvcf_list.txt"), emit: gvcf_list
+	script:
+	"""
+	zcat $gvcf_list > gvcf_list.txt
+	"""
+}
+
 
 
 process GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_SNP{
 	publishDir "${params.outdir}/gatk_vqsr/statistics/snp", mode: params.publish_dir_mode	
 	input:
-	path vcf
+	path (vcf)
+	path fai
+  path dict
 	path genome 
 	path dbsnp
 	path hapmap
 	path omni
 	path phase
+  path dbsnp_index
+  path hapmap_index
+  path omni_index
+  path phase_index
 	output:
 
 	path ("merged.snps.tranches"), emit: tranches
@@ -546,10 +792,12 @@ process GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_SNP{
 process GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_SNP{
 	publishDir "${params.outdir}/gatk_vqsr/snp", mode: params.publish_dir_mode
 	input:
-	path vcf 
+	path (vcf) 
+	path fai
+  path dict
 	path genome
-	path tranches
-	path recal
+	path (tranches)
+	path (recal)
 	output:
 	path ("merged.VQSR.snps.vcf"), emit: vqsr_vcf
 	script:
@@ -567,12 +815,17 @@ process GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_SNP{
 
 
 process GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_INDEL{
+
 	publishDir "${params.outdir}/gatk_vqsr/statistics/indel", mode: params.publish_dir_mode	
 	input:
-	path vcf
+	path (vcf)
+	path fai
+  path dict
 	path genome 
 	path dbsnp
 	path indel
+  path dbsnp_index
+  path indel_index
 	output:
 
 	path ("merged.indel.tranches"), emit: tranches
@@ -603,12 +856,14 @@ process GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_INDEL{
 }
 
 process GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_INDEL{
-	publishDir "${params.outdir}/gatk_vqsr/snp", mode: params.publish_dir_mode
+	publishDir "${params.outdir}/gatk_vqsr/indel", mode: params.publish_dir_mode
 	input:
-	path vcf
+	path (vcf)
+	path fai
+  path dict
 	path genome
-	path tranches
-	path recal
+	path (tranches)
+	path (recal)
 	output:
 	path ("merged.VQSR.indel.vcf"), emit: vqsr_vcf
 	script:
@@ -623,6 +878,10 @@ process GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_INDEL{
 			-O merged.VQSR.indel.vcf
 	"""
 }
+
+
+
+
 
 process MULTIQC_FOR_RAW_READS_FASTQC_RESULTS {
     label 'process_medium'
@@ -732,7 +991,7 @@ process MULTIQC_FOR_SAMTOOLS_IDX_STATISTICS_RESULTS {
     """
 }
 
-process MULTIQC_FOR_BAM_MAPPED_AND_SAMTOOLS_SORTED_BAM{
+process MULTIQC_FOR_BAM_MAPPED_AND_SAMTOOLS_SORTED_BAM {
     label 'process_medium'
     publishDir "${params.outdir}/Analysis_Report/bam_mapping", mode: 'copy'
 
@@ -785,6 +1044,19 @@ process MULTIQC_FOR_GATK_BQSR_STATISTISC_BAM {
     multiqc -f --export GATK_BQSR/
     """
 }
+
+workflow GET_ALL_SOFTWARE_VERSION_FOR_WGS_PIPELINE{
+
+    GET_NEXTFLOW_SOFTWARE_VERSION_FOR_WGS_ANALYSIS (  )
+    GET_FASTQC_SOFTWARE_VERSION_FOR_WGS_ANALYSIS (  )
+    GET_SAMTOOLS_SOFTWARE_VERSION_FOR_WGS_ANALYSIS (  )
+    GET_MULTIQC_SOFTWARE_VERSION_FOR_WGS_ANALYSIS (  )
+    GET_BWA_SOFTWARE_VERSION_FOR_WGS_ANALYSIS (  )
+    GET_GATK_SOFTWARE_VERSION_FOR_WGS_ANALYSIS (  )
+    GET_FASTP_SOFTWARE_VERSION_FOR_WGS_ANALYSIS (  )
+
+}
+
 /*
 --------------------------------------------------------------------------------
 Define a fastqc/fastp reads check and filter function for pipeline
@@ -852,7 +1124,7 @@ workflow BWA_MAPPING_FOR_CLEAN_READS_AND_SAMTOOLS_SORTSTAT_FOR_MAPPED_READS{
 	}
 	
 	BWA_MAPPING_FOR_CLEAN_READS_RESULTED_BY_FASTP ( reads, index )
-	SAMTOOLS_SORTING_BAM_FOR_BWA_UNSORTED_BAM ( bam )
+	SAMTOOLS_SORTING_BAM_FOR_BWA_UNSORTED_BAM (BWA_MAPPING_FOR_CLEAN_READS_RESULTED_BY_FASTP.out.bam )
 	bam_ch_for_idx = SAMTOOLS_SORTING_BAM_FOR_BWA_UNSORTED_BAM.out.sorted_bam
 	bam_ch_for_stat = SAMTOOLS_SORTING_BAM_FOR_BWA_UNSORTED_BAM.out.sorted_bam
 	bam_ch_for_flagstat = SAMTOOLS_SORTING_BAM_FOR_BWA_UNSORTED_BAM.out.sorted_bam
@@ -873,6 +1145,8 @@ workflow GATK_VARIANTS_CALLING_WORKFLOW_FOR_BWA_MAPPED_AND_SAMTOOLS_SORTED_BAM{
 
 	take:
 	bam
+	fai
+  dict
 	genome
 	dbsnp
 	indel1
@@ -880,38 +1154,60 @@ workflow GATK_VARIANTS_CALLING_WORKFLOW_FOR_BWA_MAPPED_AND_SAMTOOLS_SORTED_BAM{
 	hapmap
 	omni
 	phase
+  dbsnp_index
+  indel1_index
+  indel2_index
+  hapmap_index
+  omni_index
+  phase_index
 
 	main:
 	GATK_MARKDUPLICATES_FOR_BWA_SAMTOOLS_SORTED_BAM ( bam )
 	bam_ch_for_bqsr = GATK_MARKDUPLICATES_FOR_BWA_SAMTOOLS_SORTED_BAM.out.markdup_bam
-	GATK_BASERECALIBRATOR_FOR_GATK_MARKDUPLICATES_BAM ( GATK_MARKDUPLICATES_FOR_BWA_SAMTOOLS_SORTED_BAM.out.markdup_bam, genome, dbsnp, indel1, indel2 )
-	GATK_APPLYBQSR_FOR_MARKDUPLICATES_BAM_WITH_BASERECALIBRATOR_TABLE ( bam_ch_for_bqsr, genome, GATK_BASERECALIBRATOR_FOR_GATK_MARKDUPLICATES_BAM.out.bqsr_table )
-	GATK_HAPLOTYPECALLER_FOR_APPLIED_BQSR_QC_BAM ( GATK_APPLYBQSR_FOR_MARKDUPLICATES_BAM_WITH_BASERECALIBRATOR_TABLE.out.bqsr_bam, genome, dbsnp )
-    GATK_HAPLOTYPECALLER_FOR_APPLIED_BQSR_QC_BAM.out.gvcf.collectFile(name: 'input_list', newLine: true)
-                                                                .set { GvcfFileList }
-    COMBINE_GVCF_FILE_RESULTED_BY_GATK_HAPLOTYPECALLER ( GvcfFileList, genome )  
-    GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES ( COMBINE_GVCF_FILE_RESULTED_BY_GATK_HAPLOTYPECALLER.out.combined_gvcf, genome )
-    vcf_ch_vqsr_snp_call    = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.vcf
-    vcf_ch_vqsr_snp_apply   = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.vcf
-    vcf_ch_vqsr_indel_call  = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.vcf
-    vcf_ch_vqsr_indel_apply = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.vcf 
-    GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_SNP ( vcf_ch_vqsr_snp_call, genome, dbsnp, hapmap, omni, phase )
-	GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_SNP ( vcf_ch_vqsr_snp_call, genome, 
+	GATK_BASERECALIBRATOR_FOR_GATK_MARKDUPLICATES_BAM ( GATK_MARKDUPLICATES_FOR_BWA_SAMTOOLS_SORTED_BAM.out.markdup_bam, fai, dict, genome, dbsnp, indel1, indel2,
+                                                        dbsnp_index, indel1_index, indel2_index  )
+	GATK_APPLYBQSR_FOR_MARKDUPLICATES_BAM_WITH_BASERECALIBRATOR_TABLE ( bam_ch_for_bqsr, fai, dict, genome, GATK_BASERECALIBRATOR_FOR_GATK_MARKDUPLICATES_BAM.out.bqsr_table )
+	GATK_HAPLOTYPECALLER_FOR_APPLIED_BQSR_QC_BAM ( GATK_APPLYBQSR_FOR_MARKDUPLICATES_BAM_WITH_BASERECALIBRATOR_TABLE.out.bqsr_bam, fai, dict, genome, dbsnp, dbsnp_index )
+    //GATK_HAPLOTYPECALLER_FOR_APPLIED_BQSR_QC_BAM.out.gvcf.collectFile(name: 'input_list.txt', newLine: true)
+	//															.view { it.text }
+    //                                                            .set { GvcfFileList }
+	//GATK_HAPLOTYPECALLER_FOR_APPLIED_BQSR_QC_BAM.out.gvcf.collect{it[1]}
+
+
+
+    //TEST_GVCF_LIST ( GvcfFileList )
+	COMBINE_GVCF_FILE_RESULTED_BY_GATK_HAPLOTYPECALLER ( fai, dict, genome, GATK_HAPLOTYPECALLER_FOR_APPLIED_BQSR_QC_BAM.out.gvcf.collect{it[1]} ) 
+
+    GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES ( COMBINE_GVCF_FILE_RESULTED_BY_GATK_HAPLOTYPECALLER.out.combined_gvcf, fai, dict, genome 
+    //  dbsnp, indel2, hapmap, omni, phase, dbsnp_index, indel2_index, hapmap_index, omni_index, phase_index
+    )
+
+    
+  vcf_ch_vqsr_snp_call    = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.vcf
+  vcf_ch_vqsr_snp_apply   = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.vcf
+  vcf_ch_vqsr_indel_call  = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.vcf
+  vcf_ch_vqsr_indel_apply = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.vcf 
+    
+  GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_SNP ( GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.vcf, fai, dict, genome, dbsnp, hapmap, omni, phase, 
+                                                                        dbsnp_index, hapmap_index, omni_index, phase_index )
+	GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_SNP ( vcf_ch_vqsr_snp_apply, fai, dict, genome, 
 								GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_SNP.out.tranches, 
 								GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_SNP.out.recal )
-	GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_INDEL ( vcf_ch_vqsr_indel_call, genome, dbsnp, indel2 )
-	GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_INDEL ( vcf_ch_vqsr_indel_apply, genome, 
+	GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_INDEL ( vcf_ch_vqsr_indel_call, fai, dict, genome, dbsnp, indel2, dbsnp_index, indel2_index )
+	GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_INDEL ( vcf_ch_vqsr_indel_apply, fai, dict, genome, 
 								GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_INDEL.out.tranches, 
-								GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_INDEL.out.recal )
+								GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_INDEL.out.recal )  
 
 	emit:
 	markdup_metrics   =  GATK_MARKDUPLICATES_FOR_BWA_SAMTOOLS_SORTED_BAM.out.metrics
-	bqsr_table		  =	 GATK_BASERECALIBRATOR_FOR_GATK_MARKDUPLICATES_BAM.out.bqsr_table
-	sample_fvcf       =  GATK_HAPLOTYPECALLER_FOR_APPLIED_BQSR_QC_BAM.out.gvcf
+	bqsr_table		    =	 GATK_BASERECALIBRATOR_FOR_GATK_MARKDUPLICATES_BAM.out.bqsr_table
+	sample_gvcf       =  GATK_HAPLOTYPECALLER_FOR_APPLIED_BQSR_QC_BAM.out.gvcf
 	combined_gvcf     =  COMBINE_GVCF_FILE_RESULTED_BY_GATK_HAPLOTYPECALLER.out.combined_gvcf
 	combined_vcf      =  GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.vcf
 	vqsr_snp          =  GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_SNP.out.vqsr_vcf
 	vqsr_indel        =  GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_INDEL.out.vqsr_vcf
+  //  snp               = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.snp
+  //  indel             = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.indel
 
 }
 
@@ -948,18 +1244,60 @@ THIS IS THE START OF PIPELINE
 */
 workflow {
 
+    GET_ALL_SOFTWARE_VERSION_FOR_WGS_PIPELINE (  )
+
 	FASTQC_QUALITY_CHECK_AND_FASTP_READS_FILTER_FOR_RAW_READS ( raw_reads )
 	BWA_MAPPING_FOR_CLEAN_READS_AND_SAMTOOLS_SORTSTAT_FOR_MAPPED_READS ( genome_fasta, params.bwa_index, FASTQC_QUALITY_CHECK_AND_FASTP_READS_FILTER_FOR_RAW_READS.out.clean_reads_ch )
+	
+	SAMTOOLS_FAI_INDEX_FOR_INPUT_GENOME_FASTA ( genome_fasta )
+	fai = SAMTOOLS_FAI_INDEX_FOR_INPUT_GENOME_FASTA.out.genome_fai
+
+  GATK_CREATE_SEQUENCE_DICTIONARY_FOR_INPUT_GENOME_FASTA ( genome_fasta )
+  dict = GATK_CREATE_SEQUENCE_DICTIONARY_FOR_INPUT_GENOME_FASTA.out.genome_dict
+	
 	GATK_VARIANTS_CALLING_WORKFLOW_FOR_BWA_MAPPED_AND_SAMTOOLS_SORTED_BAM ( BWA_MAPPING_FOR_CLEAN_READS_AND_SAMTOOLS_SORTSTAT_FOR_MAPPED_READS.out.bam,
-																			genome_fasta, dbsnp, indel1, indel2, hapmap, omni, phase )
-	MULTIQC_REPORT_FOR_ALL_ANALYSIS_RESULTS (         FASTQC_QUALITY_CHECK_AND_FASTP_READS_FILTER_FOR_RAW_READS.out.raw_fastqc_zip.collect{it[1]},
-        											  FASTQC_QUALITY_CHECK_AND_FASTP_READS_FILTER_FOR_RAW_READS.out.fastp_json.collect{it[1]},
-        											  FASTQC_QUALITY_CHECK_AND_FASTP_READS_FILTER_FOR_RAW_READS.out.clean_fastqc_zip.collect{it[1]}, 
-        											  BWA_MAPPING_FOR_CLEAN_READS_AND_SAMTOOLS_SORTSTAT_FOR_MAPPED_READS.out.stats.collect{it[1]}, 
-        											  BWA_MAPPING_FOR_CLEAN_READS_AND_SAMTOOLS_SORTSTAT_FOR_MAPPED_READS.out.flagstat.collect{it[1]}, 
-        											  BWA_MAPPING_FOR_CLEAN_READS_AND_SAMTOOLS_SORTSTAT_FOR_MAPPED_READS.out.idxstat.collect{it[1]}, 
-        											  BWA_MAPPING_FOR_CLEAN_READS_AND_SAMTOOLS_SORTSTAT_FOR_MAPPED_READS.out.bam_fastqc.collect{it[1]}, 
-        											  GATK_VARIANTS_CALLING_WORKFLOW_FOR_BWA_MAPPED_AND_SAMTOOLS_SORTED_BAM.out.markdup_metrics.collect{it[1]}, 
-        											  GATK_VARIANTS_CALLING_WORKFLOW_FOR_BWA_MAPPED_AND_SAMTOOLS_SORTED_BAM.out.bqsr_table.collect{it[1]}
-        											  )
+																			dict, fai, genome_fasta, dbsnp, indel1, indel2, hapmap, omni, phase,
+                                      dbsnp_index, indel1_index, indel2_index, hapmap_index, omni_index, phase_index )
+
+  MULTIQC_REPORT_FOR_ALL_ANALYSIS_RESULTS ( FASTQC_QUALITY_CHECK_AND_FASTP_READS_FILTER_FOR_RAW_READS.out.raw_fastqc_zip.collect{it[1]},
+        											              FASTQC_QUALITY_CHECK_AND_FASTP_READS_FILTER_FOR_RAW_READS.out.fastp_json.collect{it[1]},
+        											              FASTQC_QUALITY_CHECK_AND_FASTP_READS_FILTER_FOR_RAW_READS.out.clean_fastqc_zip.collect{it[1]}, 
+        											              BWA_MAPPING_FOR_CLEAN_READS_AND_SAMTOOLS_SORTSTAT_FOR_MAPPED_READS.out.stats.collect{it[1]}, 
+        											              BWA_MAPPING_FOR_CLEAN_READS_AND_SAMTOOLS_SORTSTAT_FOR_MAPPED_READS.out.flagstat.collect{it[1]}, 
+        											              BWA_MAPPING_FOR_CLEAN_READS_AND_SAMTOOLS_SORTSTAT_FOR_MAPPED_READS.out.idxstat.collect{it[1]}, 
+        											              BWA_MAPPING_FOR_CLEAN_READS_AND_SAMTOOLS_SORTSTAT_FOR_MAPPED_READS.out.bam_fastqc.collect{it[1]}, 
+        											              GATK_VARIANTS_CALLING_WORKFLOW_FOR_BWA_MAPPED_AND_SAMTOOLS_SORTED_BAM.out.markdup_metrics.collect{it[1]}, 
+        											              GATK_VARIANTS_CALLING_WORKFLOW_FOR_BWA_MAPPED_AND_SAMTOOLS_SORTED_BAM.out.bqsr_table.collect{it[1]}
+        											  ) 
+
+}
+
+/*
+====================================================
+====================================================
+*/
+
+
+
+def nfcoreHeader() {
+    // Log colors ANSI codes
+    c_black = params.monochrome_logs ? '' : "\033[0;30m";
+    c_blue = params.monochrome_logs ? '' : "\033[0;34m";
+    c_cyan = params.monochrome_logs ? '' : "\033[0;36m";
+    c_dim = params.monochrome_logs ? '' : "\033[2m";
+    c_green = params.monochrome_logs ? '' : "\033[0;32m";
+    c_purple = params.monochrome_logs ? '' : "\033[0;35m";
+    c_reset = params.monochrome_logs ? '' : "\033[0m";
+    c_white = params.monochrome_logs ? '' : "\033[0;37m";
+    c_yellow = params.monochrome_logs ? '' : "\033[0;33m";
+
+    return """    -${c_dim}--------------------------------------------------${c_reset}-
+                                            ${c_green},--.${c_black}/${c_green},-.${c_reset}
+    ${c_blue}        ___     __   __   __   ___     ${c_green}/,-._.--~\'${c_reset}
+    ${c_blue}  |\\ | |__  __ /  ` /  \\ |__) |__         ${c_yellow}}  {${c_reset}
+    ${c_blue}  | \\| |       \\__, \\__/ |  \\ |___     ${c_green}\\`-._,-`-,${c_reset}
+                                            ${c_green}`._,._,\'${c_reset}
+    ${c_purple}  nf-core/rnaseq_pipeline/@zhangdongqin2@126.com v${workflow.manifest.version}${c_reset}
+    -${c_dim}--------------------------------------------------${c_reset}-
+    """.stripIndent()
 }
