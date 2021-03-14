@@ -10,7 +10,7 @@ A easy and quick pipeline for WGS/WES data analysis
 	-This pipeline is based one nextflow DSL2 , so you can run nextflow self-update to update NEXTFLOW to new version
 
 2. -STEP02:
-	-CONDA ENVIRONMENT DEPLOY:
+	-CONDA ENVIRONMENT DEPLOY(OPTIONAL): REQUIREMENTS( fastqc, fastp, multiqc, bwa, gatk, annovar, samtools )
 	```bash
 	conda env create -f environment.yaml
 	```
