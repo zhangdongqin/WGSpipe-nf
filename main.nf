@@ -637,7 +637,7 @@ process GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES{
 	input:
 	path gvcf
 	path fai
-  path dict
+  	path dict
 	path genome
   /*path dbsnp
     path indel
@@ -651,7 +651,7 @@ process GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES{
     path phase_index*/
 
 	output:
-	path ("GATK_combined_bqsr.vcf") , emit: vcf
+	path ("GATK_combined_bqsr.vcf") ,  emit: vcf
     path ("merged.VQSR.snps.vcf") ,   emit: snp
     path ("merged.VQSR.indel.vcf") ,  emit: indel
 	script:
@@ -727,6 +727,182 @@ process GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES{
 */	
 }
 
+process GATK_SELECT_SNP_VARIANTS_FOR_MERGED_RAW_VCF{
+  label 'gatk'
+  publishDir "${params.outdir}/gatk_vcf/snp/raw", mode: params.publish_dir_mode
+  input:
+  path vcf
+  output:
+  path ("snp.raw.vcf") ,  emit: vcf
+
+  script:
+  """
+  gatk SelectVariants \\
+             -select-type SNP \\
+             -V $vcf \\
+             -O snp.raw.vcf
+
+  """
+} 
+
+process GATK_SELECT_INDEL_VARIANTS_FOR_MERGED_RAW_VCF{
+  label 'gatk'
+  publishDir "${params.outdir}/gatk_vcf/indel/raw", mode: params.publish_dir_mode
+  input:
+  path vcf
+  output:
+  path ("indel.raw.vcf") ,  emit: vcf
+
+  script:
+  """
+  gatk SelectVariants \\
+             -select-type INDEL \\
+             -V $vcf \\
+             -O indel.raw.vcf
+
+  """
+
+} 
+
+process GATK_SNP_VARIANTS_FILTRATION_FOR_RAW_SNP_VCF{
+  label 'gatk'
+  publishDir "${params.outdir}/gatk_vcf/snp/clean", mode: params.publish_dir_mode
+  input:
+  path vcf
+  output:
+  path ("snp.clean.vcf") ,  emit: vcf
+  script:
+  """
+  gatk \\
+          VariantFiltration \\
+          -V $vcf \\
+          --filter-expression "QD < 2.0 || MQ < 40.0 || FS > 60.0 || SOR > 3.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0" \\
+          --filter-name "PASS" \\
+          -O snp.clean.vcf
+  """
+} 
+
+process GATK_INDEL_VARIANTS_FILTRATION_FOR_RAW_INDEL_VCF{
+  label 'gatk'
+  publishDir "${params.outdir}/gatk_vcf/indel/clean", mode: params.publish_dir_mode
+  input:
+  path vcf
+  output:
+  path ("indel.clean.vcf") ,  emit: vcf
+  script:
+  """
+  gatk \\
+          VariantFiltration \\
+          -V $vcf \\
+          --filter-expression "QD < 2.0 || FS > 200.0 || SOR > 10.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0"  \\
+          --filter-name "PASS" \\
+          -O indel.clean.vcf
+  """
+} 
+
+process ANNOVAR_FORMAT_CONVERT_FOR_RAW_SNP_VARIANTS{
+
+  publishDir "${params.outdir}/annovar/input/raw_snp", mode: params.publish_dir_mode
+  input:
+  path vcf
+  output:
+  path ("snp.avinput") ,  emit: avinput
+  script:
+  """
+  convert2annovar.pl -format vcf4 $vcf >snp.avinput
+  """ 
+}
+
+process ANNOVAR_FORMAT_CONVERT_FOR_RAW_INDEL_VARIANTS{
+  publishDir "${params.outdir}/annovar/input/raw_indel", mode: params.publish_dir_mode
+  input:
+  path vcf
+  output:
+  path ("indel.avinput") ,  emit: avinput
+  script:
+  """
+  convert2annovar.pl -format vcf4 $vcf >indel.avinput
+  """
+}
+
+process ANNOVAR_FORMAT_CONVERT_FOR_CLEAN_SNP_VARIANTS{
+  publishDir "${params.outdir}/annovar/input/clean_snp", mode: params.publish_dir_mode
+  input:
+  path vcf
+  output:
+  path ("snp.avinput") ,  emit: avinput
+  script:
+  """
+  convert2annovar.pl -format vcf4 $vcf >snp.avinput
+  """
+}
+
+process ANNOVAR_FORMAT_CONVERT_FOR_CLEAN_INDEL_VARIANTS{
+  publishDir "${params.outdir}/annovar/input/clean_indel", mode: params.publish_dir_mode
+  input:
+  path vcf
+  output:
+  path ("indel.avinput") ,  emit: avinput
+  script:
+  """
+  convert2annovar.pl -format vcf4 $vcf >indel.avinput
+  """
+}
+
+process ANNOVAR_VARIANTS_ANNOTATION_FOR_RAW_SNP_VARIANTS{
+  publishDir "${params.outdir}/annovar/results/raw_snp", mode: params.publish_dir_mode
+  input:
+  path avinput
+  output:
+  path ("snp_annotation.hg38_multianno.csv") ,  emit: avoutput
+
+  script:
+  """
+  table_annovar.pl $avinput ${params.annovar_db} -buildver hg38 -out snp_annotation -remove -protocol refGene,cytoBand,esp6500siv2_all -operation g,r,f -nastring . -csvout
+
+  """
+}
+process ANNOVAR_VARIANTS_ANNOTATION_FOR_RAW_INDEL_VARIANTS{
+  publishDir "${params.outdir}/annovar/results/raw_indel", mode: params.publish_dir_mode
+  input:
+  path avinput
+  output:
+  path ("indel_annotation.hg38_multianno.csv") ,  emit: avoutput
+
+  script:
+  """
+  table_annovar.pl $avinput ${params.annovar_db} -buildver hg38 -out indel_annotation -remove -protocol refGene,cytoBand,esp6500siv2_all -operation g,r,f -nastring . -csvout
+
+  """
+}
+process ANNOVAR_VARIANTS_ANNOTATION_FOR_CLEAN_SNP_VARIANTS{
+  publishDir "${params.outdir}/annovar/results/clean_snp", mode: params.publish_dir_mode
+  input:
+  path avinput
+  output:
+  path ("snp_annotation.hg38_multianno.csv") ,  emit: avoutput
+
+  script:
+  """
+  table_annovar.pl $avinput ${params.annovar_db} -buildver hg38 -out snp_annotation -remove -protocol refGene,cytoBand,esp6500siv2_all -operation g,r,f -nastring . -csvout
+
+  """  
+}
+process ANNOVAR_VARIANTS_ANNOTATION_FOR_CLEAN_INDEL_VARIANTS{
+  publishDir "${params.outdir}/annovar/results/clean_indel", mode: params.publish_dir_mode
+  input:
+  path avinput
+  output:
+  path ("indel_annotation.hg38_multianno.csv") ,  emit: avoutput
+
+  script:
+  """
+  table_annovar.pl $avinput ${params.annovar_db} -buildver hg38 -out indel_annotation -remove -protocol refGene,cytoBand,esp6500siv2_all -operation g,r,f -nastring . -csvout
+
+  """  
+}
+
+
 
 
 process TEST_GVCF_LIST {
@@ -743,6 +919,8 @@ process TEST_GVCF_LIST {
 
 
 
+
+/*
 process GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_SNP{
 	publishDir "${params.outdir}/gatk_vqsr/statistics/snp", mode: params.publish_dir_mode	
 	input:
@@ -880,7 +1058,7 @@ process GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_INDEL{
 }
 
 
-
+*/
 
 
 process MULTIQC_FOR_RAW_READS_FASTQC_RESULTS {
@@ -1178,11 +1356,27 @@ workflow GATK_VARIANTS_CALLING_WORKFLOW_FOR_BWA_MAPPED_AND_SAMTOOLS_SORTED_BAM{
     //TEST_GVCF_LIST ( GvcfFileList )
 	COMBINE_GVCF_FILE_RESULTED_BY_GATK_HAPLOTYPECALLER ( fai, dict, genome, GATK_HAPLOTYPECALLER_FOR_APPLIED_BQSR_QC_BAM.out.gvcf.collect{it[1]} ) 
 
-    GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES ( COMBINE_GVCF_FILE_RESULTED_BY_GATK_HAPLOTYPECALLER.out.combined_gvcf, fai, dict, genome 
+  GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES ( COMBINE_GVCF_FILE_RESULTED_BY_GATK_HAPLOTYPECALLER.out.combined_gvcf, fai, dict, genome 
     //  dbsnp, indel2, hapmap, omni, phase, dbsnp_index, indel2_index, hapmap_index, omni_index, phase_index
     )
+  vcf_for_snp_select    = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.vcf
+  vcf_for_indel_select  = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.vcf
 
-    
+  GATK_SELECT_SNP_VARIANTS_FOR_MERGED_RAW_VCF ( vcf_for_snp_select )
+  GATK_SELECT_INDEL_VARIANTS_FOR_MERGED_RAW_VCF ( vcf_for_indel_select )
+  raw_snp_for_av        = GATK_SELECT_SNP_VARIANTS_FOR_MERGED_RAW_VCF.out.vcf
+  raw_indel_for_av      = GATK_SELECT_INDEL_VARIANTS_FOR_MERGED_RAW_VCF.out.vcf
+  GATK_SNP_VARIANTS_FILTRATION_FOR_RAW_SNP_VCF ( GATK_SELECT_SNP_VARIANTS_FOR_MERGED_RAW_VCF.out.vcf )
+  GATK_INDEL_VARIANTS_FILTRATION_FOR_RAW_INDEL_VCF ( GATK_SELECT_INDEL_VARIANTS_FOR_MERGED_RAW_VCF.out.vcf )
+  ANNOVAR_FORMAT_CONVERT_FOR_RAW_SNP_VARIANTS ( raw_snp_for_av )
+  ANNOVAR_FORMAT_CONVERT_FOR_RAW_INDEL_VARIANTS ( raw_indel_for_av )
+  ANNOVAR_FORMAT_CONVERT_FOR_CLEAN_SNP_VARIANTS ( GATK_SNP_VARIANTS_FILTRATION_FOR_RAW_SNP_VCF.out.vcf )
+  ANNOVAR_FORMAT_CONVERT_FOR_CLEAN_INDEL_VARIANTS ( GATK_INDEL_VARIANTS_FILTRATION_FOR_RAW_INDEL_VCF.out.vcf )
+  ANNOVAR_VARIANTS_ANNOTATION_FOR_RAW_SNP_VARIANTS ( ANNOVAR_FORMAT_CONVERT_FOR_RAW_SNP_VARIANTS.out.avinput )
+  ANNOVAR_VARIANTS_ANNOTATION_FOR_RAW_INDEL_VARIANTS ( ANNOVAR_FORMAT_CONVERT_FOR_RAW_INDEL_VARIANTS.out.avinput )
+  ANNOVAR_VARIANTS_ANNOTATION_FOR_CLEAN_SNP_VARIANTS ( ANNOVAR_FORMAT_CONVERT_FOR_CLEAN_SNP_VARIANTS.out.avinput )
+  ANNOVAR_VARIANTS_ANNOTATION_FOR_CLEAN_INDEL_VARIANTS ( ANNOVAR_FORMAT_CONVERT_FOR_CLEAN_INDEL_VARIANTS.out.avinput )
+  /*  
   vcf_ch_vqsr_snp_call    = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.vcf
   vcf_ch_vqsr_snp_apply   = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.vcf
   vcf_ch_vqsr_indel_call  = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.vcf
@@ -1196,7 +1390,7 @@ workflow GATK_VARIANTS_CALLING_WORKFLOW_FOR_BWA_MAPPED_AND_SAMTOOLS_SORTED_BAM{
 	GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_INDEL ( vcf_ch_vqsr_indel_call, fai, dict, genome, dbsnp, indel2, dbsnp_index, indel2_index )
 	GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_INDEL ( vcf_ch_vqsr_indel_apply, fai, dict, genome, 
 								GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_INDEL.out.tranches, 
-								GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_INDEL.out.recal )  
+								GATK_VARIANTRECALIBRATOR_SNP_QUALITY_CONTROL_FOR_COMBINED_VCF_INDEL.out.recal )  */
 
 	emit:
 	markdup_metrics   =  GATK_MARKDUPLICATES_FOR_BWA_SAMTOOLS_SORTED_BAM.out.metrics
@@ -1204,11 +1398,18 @@ workflow GATK_VARIANTS_CALLING_WORKFLOW_FOR_BWA_MAPPED_AND_SAMTOOLS_SORTED_BAM{
 	sample_gvcf       =  GATK_HAPLOTYPECALLER_FOR_APPLIED_BQSR_QC_BAM.out.gvcf
 	combined_gvcf     =  COMBINE_GVCF_FILE_RESULTED_BY_GATK_HAPLOTYPECALLER.out.combined_gvcf
 	combined_vcf      =  GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.vcf
-	vqsr_snp          =  GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_SNP.out.vqsr_vcf
-	vqsr_indel        =  GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_INDEL.out.vqsr_vcf
+	//vqsr_snp          =  GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_SNP.out.vqsr_vcf
+	//vqsr_indel        =  GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_INDEL.out.vqsr_vcf
   //  snp               = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.snp
   //  indel             = GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES.out.indel
-
+  combined_raw_snp         = GATK_SELECT_SNP_VARIANTS_FOR_MERGED_RAW_VCF.out.vcf
+  combined_raw_indel       = GATK_SELECT_INDEL_VARIANTS_FOR_MERGED_RAW_VCF.out.vcf
+  combined_clean_snp       = GATK_SNP_VARIANTS_FILTRATION_FOR_RAW_SNP_VCF.out.vcf
+  combined_clean_indel     = GATK_INDEL_VARIANTS_FILTRATION_FOR_RAW_INDEL_VCF.out.vcf
+  annotation_raw_snp       = ANNOVAR_VARIANTS_ANNOTATION_FOR_RAW_SNP_VARIANTS.out.avoutput
+  annotation_raw_indel     = ANNOVAR_VARIANTS_ANNOTATION_FOR_RAW_INDEL_VARIANTS.out.avoutput
+  annotation_clean_snp     = ANNOVAR_VARIANTS_ANNOTATION_FOR_CLEAN_SNP_VARIANTS.out.avoutput
+  annotation_clean_indel   = ANNOVAR_VARIANTS_ANNOTATION_FOR_CLEAN_INDEL_VARIANTS.out.avoutput
 }
 
 workflow MULTIQC_REPORT_FOR_ALL_ANALYSIS_RESULTS {
