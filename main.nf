@@ -619,7 +619,7 @@ process COMBINE_GVCF_FILE_RESULTED_BY_GATK_HAPLOTYPECALLER{
     }   */
 
 	"""
-    ls -lhrt gvcf_path/* |awk '{print \$11}' > gvcf.list
+  ls -lhrt gvcf_path/* | awk '{print \$11}' > gvcf.list
 
 	gatk \\
 		--java-options \\
@@ -637,7 +637,7 @@ process GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES{
 	input:
 	path gvcf
 	path fai
-  	path dict
+	path dict
 	path genome
   /*path dbsnp
     path indel
@@ -652,8 +652,8 @@ process GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES{
 
 	output:
 	path ("GATK_combined_bqsr.vcf") ,  emit: vcf
-    path ("merged.VQSR.snps.vcf") ,   emit: snp
-    path ("merged.VQSR.indel.vcf") ,  emit: indel
+  path ("merged.VQSR.snps.vcf") ,   emit: snp
+  path ("merged.VQSR.indel.vcf") ,  emit: indel
 	script:
 	"""
 	gatk \\
@@ -1062,6 +1062,7 @@ process GATK_APPLY_VQSR_QUALITY_CONTROL_FOR_COMBINED_RAW_VCF_INDEL{
 
 
 process MULTIQC_FOR_RAW_READS_FASTQC_RESULTS {
+    label 'multiqc'
     label 'process_medium'
     publishDir "${params.outdir}/Analysis_Report/raw_reads_fastqc", mode: 'copy'
 
@@ -1080,6 +1081,7 @@ process MULTIQC_FOR_RAW_READS_FASTQC_RESULTS {
 }
 
 process MULTIQC_FOR_FASTP_READS_FILTER_RESULTS {
+    label 'multiqc'
     label 'process_medium'
     publishDir "${params.outdir}/Analysis_Report/fastp", mode: 'copy'
 
@@ -1098,6 +1100,7 @@ process MULTIQC_FOR_FASTP_READS_FILTER_RESULTS {
 }
 
 process MULTIQC_FOR_CLEAN_READS_FASTQC_RESULTS {
+    label 'multiqc'
     label 'process_medium'
     publishDir "${params.outdir}/Analysis_Report/raw_reads_fastqc", mode: 'copy'
 
@@ -1116,6 +1119,7 @@ process MULTIQC_FOR_CLEAN_READS_FASTQC_RESULTS {
 }
 
 process MULTIQC_FOR_SAMTOOLS_STATISTICS_RESULTS {
+    label 'multiqc'
     label 'process_medium'
     publishDir "${params.outdir}/Analysis_Report/samtools_stat", mode: 'copy'
 
@@ -1134,6 +1138,7 @@ process MULTIQC_FOR_SAMTOOLS_STATISTICS_RESULTS {
 }
 
 process MULTIQC_FOR_SAMTOOLS_FLAG_STATISTICS_RESULTS {
+    label 'multiqc'
     label 'process_medium'
     publishDir "${params.outdir}/Analysis_Report/samtools_flagstat", mode: 'copy'
 
@@ -1152,6 +1157,7 @@ process MULTIQC_FOR_SAMTOOLS_FLAG_STATISTICS_RESULTS {
 }
 
 process MULTIQC_FOR_SAMTOOLS_IDX_STATISTICS_RESULTS {
+    label 'multiqc'
     label 'process_medium'
     publishDir "${params.outdir}/Analysis_Report/samtools_idxstat", mode: 'copy'
 
@@ -1170,6 +1176,7 @@ process MULTIQC_FOR_SAMTOOLS_IDX_STATISTICS_RESULTS {
 }
 
 process MULTIQC_FOR_BAM_MAPPED_AND_SAMTOOLS_SORTED_BAM {
+    label 'multiqc'
     label 'process_medium'
     publishDir "${params.outdir}/Analysis_Report/bam_mapping", mode: 'copy'
 
@@ -1188,6 +1195,7 @@ process MULTIQC_FOR_BAM_MAPPED_AND_SAMTOOLS_SORTED_BAM {
 }
 
 process MULTIQC_FOR_GATK_MARKDUPED_STATISTISC_BAM {
+    label 'multiqc'
     label 'process_medium'
     publishDir "${params.outdir}/Analysis_Report/GATK_MARKDUP", mode: 'copy'
 
@@ -1206,6 +1214,7 @@ process MULTIQC_FOR_GATK_MARKDUPED_STATISTISC_BAM {
 }
 
 process MULTIQC_FOR_GATK_BQSR_STATISTISC_BAM {
+    label 'multiqc'
     label 'process_medium'
     publishDir "${params.outdir}/Analysis_Report/GATK_BQSR", mode: 'copy'
 
