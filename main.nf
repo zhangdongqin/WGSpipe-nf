@@ -652,8 +652,8 @@ process GATK_GENOTYPEGVCFS_FOR_HAPLOTYPECALLER_RESULTED_GVCF_FILES{
 
 	output:
 	path ("GATK_combined_bqsr.vcf") ,  emit: vcf
-  path ("merged.VQSR.snps.vcf") ,   emit: snp
-  path ("merged.VQSR.indel.vcf") ,  emit: indel
+  //path ("merged.VQSR.snps.vcf") ,   emit: snp
+  //path ("merged.VQSR.indel.vcf") ,  emit: indel
 	script:
 	"""
 	gatk \\
